@@ -1,27 +1,227 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/cached_storage_image.dart';
 
-class DayDetailScreen extends StatelessWidget {
+class DayDetailScreen extends StatefulWidget {
   final String date;
   final List<QueryDocumentSnapshot> reports;
+  final double aperturaCassa;
+  final double speseExtra;
+  final double? calcoloApertura; // calculated from prev day
 
-  const DayDetailScreen(
-      {super.key, required this.date, required this.reports});
+  const DayDetailScreen({
+    super.key,
+    required this.date,
+    required this.reports,
+    required this.aperturaCassa,
+    required this.speseExtra,
+    this.calcoloApertura,
+  });
+
+  @override
+  State<DayDetailScreen> createState() => _DayDetailScreenState();
+}
+
+class _DayDetailScreenState extends State<DayDetailScreen> {
+  late TextEditingController _aperturaCtrl;
+  late TextEditingController _speseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _aperturaCtrl = TextEditingController(
+        text: widget.aperturaCassa != 0
+            ? widget.aperturaCassa.toStringAsFixed(2)
+            : '');
+    _speseCtrl = TextEditingController(
+        text: widget.speseExtra != 0
+            ? widget.speseExtra.toStringAsFixed(2)
+            : '');
+  }
+
+  @override
+  void dispose() {
+    _aperturaCtrl.dispose();
+    _speseCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final apertura = double.tryParse(_aperturaCtrl.text) ?? 0;
+    final spese = double.tryParse(_speseCtrl.text) ?? 0;
+    await FirebaseFirestore.instance
+        .collection('days')
+        .doc(widget.date)
+        .set({
+      'aperturaCassa': apertura,
+      'speseExtra': spese,
+    }, SetOptions(merge: true));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('✅ Salvato'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1)),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Calculate day totals
+    double dayTotals = 0;
+    for (final doc in widget.reports) {
+      final data = doc.data() as Map<String, dynamic>;
+      if (data['totale'] != null) {
+        dayTotals += (data['totale'] as num).toDouble();
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('📅 $date'),
+        title: Text('📅 ${widget.date}'),
         centerTitle: true,
       ),
-      body: ListView.builder(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: reports.length,
-        itemBuilder: (context, index) {
-          final data = reports[index].data() as Map<String, dynamic>;
-          return _ReportSection(data: data);
-        },
+        children: [
+          // Apertura Cassa section
+          _CassaCard(
+            aperturaCtrl: _aperturaCtrl,
+            speseCtrl: _speseCtrl,
+            calcoloApertura: widget.calcoloApertura,
+            dayTotals: dayTotals,
+            onSave: _save,
+          ),
+          const SizedBox(height: 20),
+
+          // Reports
+          ...widget.reports.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return _ReportSection(data: data);
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CassaCard extends StatelessWidget {
+  final TextEditingController aperturaCtrl;
+  final TextEditingController speseCtrl;
+  final double? calcoloApertura;
+  final double dayTotals;
+  final VoidCallback onSave;
+
+  const _CassaCard({
+    required this.aperturaCtrl,
+    required this.speseCtrl,
+    required this.calcoloApertura,
+    required this.dayTotals,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.white.withOpacity(0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('💰 Cassa',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+            const SizedBox(height: 16),
+
+            if (calcoloApertura != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Apertura calcolata (da ieri):',
+                      style: TextStyle(color: Colors.white38, fontSize: 13)),
+                  Text('€ ${calcoloApertura!.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: Colors.amberAccent, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: aperturaCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Apertura Cassa',
+                      prefixText: '€ ',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.05),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: speseCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Spese Extra',
+                      prefixText: '€ ',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.05),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: onSave,
+                    icon: const Icon(Icons.save, size: 18),
+                    label: const Text('Salva'),
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const Divider(color: Colors.white12, height: 24),
+
+            // Summary
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Totale report:',
+                    style: TextStyle(color: Colors.white54)),
+                Text('€ ${dayTotals.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -35,6 +235,7 @@ class _ReportSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final type = data['type'] ?? 'unknown';
+    final imagePath = data['imagePath'] as String?;
     final imageUrl = data['imageUrl'] as String?;
     final vlt = data['vlt'] as List<dynamic>?;
     final totale = data['totale'];
@@ -50,14 +251,16 @@ class _ReportSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 _TypeBadge(type: type),
                 if (nomeAzienda != null) ...[
                   const SizedBox(width: 12),
-                  Text(nomeAzienda,
-                      style: const TextStyle(color: Colors.white54)),
+                  Expanded(
+                    child: Text(nomeAzienda,
+                        style: const TextStyle(color: Colors.white54),
+                        overflow: TextOverflow.ellipsis),
+                  ),
                 ],
                 const Spacer(),
                 if (totale != null)
@@ -73,17 +276,18 @@ class _ReportSection extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Photo + Data side by side on wide, stacked on narrow
             if (isWide)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (imageUrl != null)
+                  if (imagePath != null || imageUrl != null)
                     Expanded(
                       flex: 2,
-                      child: _ImageSection(imageUrl: imageUrl),
+                      child: CachedStorageImage(
+                          imagePath: imagePath, imageUrl: imageUrl),
                     ),
-                  if (imageUrl != null) const SizedBox(width: 16),
+                  if (imagePath != null || imageUrl != null)
+                    const SizedBox(width: 16),
                   Expanded(
                     flex: 3,
                     child: _VltTable(vlt: vlt, type: type),
@@ -91,8 +295,8 @@ class _ReportSection extends StatelessWidget {
                 ],
               )
             else ...[
-              if (imageUrl != null) ...[
-                _ImageSection(imageUrl: imageUrl),
+              if (imagePath != null || imageUrl != null) ...[
+                CachedStorageImage(imagePath: imagePath, imageUrl: imageUrl),
                 const SizedBox(height: 16),
               ],
               _VltTable(vlt: vlt, type: type),
@@ -110,40 +314,6 @@ class _ReportSection extends StatelessWidget {
   }
 }
 
-class _ImageSection extends StatelessWidget {
-  final String imageUrl;
-
-  const _ImageSection({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        imageUrl,
-        fit: BoxFit.contain,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: 200,
-            alignment: Alignment.center,
-            child: const CircularProgressIndicator(strokeWidth: 2),
-          );
-        },
-        errorBuilder: (_, __, ___) => Container(
-          height: 200,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.broken_image, color: Colors.white24, size: 48),
-        ),
-      ),
-    );
-  }
-}
-
 class _VltTable extends StatelessWidget {
   final List<dynamic>? vlt;
   final String type;
@@ -153,16 +323,11 @@ class _VltTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (vlt == null || vlt!.isEmpty) {
-      return const Text('Nessun dato macchina',
-          style: TextStyle(color: Colors.white38));
+      return const SizedBox.shrink();
     }
 
-    if (type == 'daily_report_spielo') {
-      return _buildSpieloTable();
-    } else if (type == 'report_novoline_range') {
-      return _buildNovolineTable();
-    }
-
+    if (type == 'daily_report_spielo') return _buildSpieloTable();
+    if (type == 'report_novoline_range') return _buildNovolineTable();
     return _buildGenericList();
   }
 
@@ -184,29 +349,31 @@ class _VltTable extends StatelessWidget {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                  Colors.white.withOpacity(0.05)),
-              dataRowColor:
-                  WidgetStateProperty.all(Colors.transparent),
+              headingRowColor:
+                  WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
               columns: const [
                 DataColumn(
                     label: Text('ID',
                         style: TextStyle(
-                            color: Colors.white54, fontWeight: FontWeight.bold))),
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold))),
                 DataColumn(
                     label: Text('Inc. Tot',
                         style: TextStyle(
-                            color: Colors.white54, fontWeight: FontWeight.bold)),
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold)),
                     numeric: true),
                 DataColumn(
                     label: Text('Inc. Den',
                         style: TextStyle(
-                            color: Colors.white54, fontWeight: FontWeight.bold)),
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold)),
                     numeric: true),
                 DataColumn(
                     label: Text('Pagato',
                         style: TextStyle(
-                            color: Colors.white54, fontWeight: FontWeight.bold)),
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold)),
                     numeric: true),
               ],
               rows: vlt!.map((v) {
@@ -247,89 +414,48 @@ class _VltTable extends StatelessWidget {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                  Colors.white.withOpacity(0.05)),
-              dataRowColor:
-                  WidgetStateProperty.all(Colors.transparent),
+              headingRowColor:
+                  WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
               columnSpacing: 16,
               columns: const [
-                DataColumn(
-                    label: Text('ID',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11))),
-                DataColumn(
-                    label: Text('Bill In',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                    numeric: true),
-                DataColumn(
-                    label: Text('Coin In',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                    numeric: true),
-                DataColumn(
-                    label: Text('Total In',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                    numeric: true),
-                DataColumn(
-                    label: Text('Total Out',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                    numeric: true),
-                DataColumn(
-                    label: Text('Net Win',
-                        style: TextStyle(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                    numeric: true),
+                DataColumn(label: _ColHead('ID')),
+                DataColumn(label: _ColHead('Bill In'), numeric: true),
+                DataColumn(label: _ColHead('Coin In'), numeric: true),
+                DataColumn(label: _ColHead('Total In'), numeric: true),
+                DataColumn(label: _ColHead('Total Out'), numeric: true),
+                DataColumn(label: _ColHead('Net Win'), numeric: true),
               ],
               rows: vlt!.map((v) {
                 final m = v as Map<String, dynamic>;
                 final hasUncertain = m['hasUncertainValues'] == true;
                 return DataRow(
                   color: hasUncertain
-                      ? WidgetStateProperty.all(
-                          Colors.amber.withOpacity(0.06))
+                      ? WidgetStateProperty.all(Colors.amber.withOpacity(0.06))
                       : null,
                   cells: [
-                    DataCell(Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(m['id'] ?? '-',
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12)),
-                        if (hasUncertain)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 4),
-                            child: Icon(Icons.warning_amber,
-                                size: 12, color: Colors.amber),
-                          ),
-                      ],
-                    )),
+                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(m['id'] ?? '-',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12)),
+                      if (hasUncertain)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.warning_amber,
+                              size: 12, color: Colors.amber),
+                        ),
+                    ])),
                     DataCell(Text(_fmt(m['billIn']),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12))),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12))),
                     DataCell(Text(_fmt(m['coinIn']),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12))),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12))),
                     DataCell(Text(_fmt(m['totalIn']),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12))),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12))),
                     DataCell(Text(_fmt(m['totalOut']),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12))),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12))),
                     DataCell(Text(_fmt(m['totalNetWin']),
                         style: TextStyle(
                             color: _netWinColor(m['totalNetWin']),
@@ -354,8 +480,8 @@ class _VltTable extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(v.toString(),
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 12)),
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 12)),
                 ),
               ))
           .toList(),
@@ -375,6 +501,20 @@ class _VltTable extends StatelessWidget {
     if (n is int) return n.toStringAsFixed(2);
     if (n is double) return n.toStringAsFixed(2);
     return n.toString();
+  }
+}
+
+class _ColHead extends StatelessWidget {
+  final String text;
+  const _ColHead(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text,
+        style: const TextStyle(
+            color: Colors.white54,
+            fontWeight: FontWeight.bold,
+            fontSize: 11));
   }
 }
 

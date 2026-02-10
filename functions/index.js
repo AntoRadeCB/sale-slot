@@ -23,8 +23,11 @@ exports.onImageUpload = onObjectFinalized(
     if (!object.name.startsWith("uploads/")) return;
     if (!object.contentType?.startsWith("image/")) return;
 
-    const encodedName = encodeURIComponent(object.name);
-    const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${object.bucket}/o/${encodedName}?alt=media`;
+    // Build public download URL
+    const bucketRef = admin.storage().bucket(object.bucket);
+    const fileRef = bucketRef.file(object.name);
+    await fileRef.makePublic();
+    const imageUrl = `https://storage.googleapis.com/${object.bucket}/${object.name}`;
 
     console.log(`Processing image: ${object.name}`);
 
