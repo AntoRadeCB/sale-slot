@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'report_detail_screen.dart';
+import 'day_detail_screen.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -45,7 +45,7 @@ class ReportsScreen extends StatelessWidget {
           }
 
           final sortedDates = grouped.keys.toList()
-            ..sort((a, b) => b.compareTo(a));
+            ..sort((a, b) => _compareDates(b, a));
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -53,7 +53,84 @@ class ReportsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final date = sortedDates[index];
               final reports = grouped[date]!;
-              return _DaySection(date: date, reports: reports);
+
+              // Calculate day total
+              double dayTotal = 0;
+              for (final doc in reports) {
+                final data = doc.data() as Map<String, dynamic>;
+                if (data['totale'] != null) {
+                  dayTotal += (data['totale'] as num).toDouble();
+                }
+              }
+
+              return Card(
+                color: Colors.white.withOpacity(0.06),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                margin: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          DayDetailScreen(date: date, reports: reports),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.calendar_today,
+                                color: Colors.white54),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                date,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${reports.length} report',
+                                style: const TextStyle(
+                                    color: Colors.white38, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (dayTotal != 0)
+                          Text(
+                            '€ ${dayTotal.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.white24),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             },
           );
         },
@@ -66,180 +143,17 @@ class ReportsScreen extends StatelessWidget {
     if (data['from'] != null) return data['from'];
     return 'Senza data';
   }
-}
 
-class _DaySection extends StatelessWidget {
-  final String date;
-  final List<QueryDocumentSnapshot> reports;
-
-  const _DaySection({required this.date, required this.reports});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_today, size: 18, color: Colors.white54),
-              const SizedBox(width: 8),
-              Text(
-                date,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ...reports.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return _ReportCard(docId: doc.id, data: data);
-        }),
-        const Divider(color: Colors.white12, height: 32),
-      ],
-    );
-  }
-}
-
-class _ReportCard extends StatelessWidget {
-  final String docId;
-  final Map<String, dynamic> data;
-
-  const _ReportCard({required this.docId, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final type = data['type'] ?? 'unknown';
-    final totale = data['totale'];
-    final nomeAzienda = data['nomeAzienda'];
-    final vlt = data['vlt'] as List<dynamic>?;
-
-    return Card(
-      color: Colors.white.withOpacity(0.06),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ReportDetailScreen(docId: docId, data: data),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _TypeBadge(type: type),
-                  const Spacer(),
-                  if (totale != null)
-                    Text(
-                      '€ ${_formatNumber(totale)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.greenAccent,
-                      ),
-                    ),
-                ],
-              ),
-              if (nomeAzienda != null) ...[
-                const SizedBox(height: 8),
-                Text(nomeAzienda,
-                    style: const TextStyle(color: Colors.white54)),
-              ],
-              if (vlt != null && vlt.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${vlt.length} macchine',
-                  style: const TextStyle(color: Colors.white38, fontSize: 13),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text('Dettagli →',
-                      style:
-                          TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _formatNumber(dynamic n) {
-    if (n is int) return n.toStringAsFixed(2);
-    if (n is double) return n.toStringAsFixed(2);
-    return n.toString();
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  final String type;
-
-  const _TypeBadge({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final config = _badgeConfig(type);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: config.color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: config.color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(config.icon, size: 14, color: config.color),
-          const SizedBox(width: 4),
-          Text(config.label,
-              style: TextStyle(color: config.color, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  static ({Color color, IconData icon, String label}) _badgeConfig(
-      String type) {
-    switch (type) {
-      case 'chiusura_pos':
-        return (
-          color: Colors.blueAccent,
-          icon: Icons.point_of_sale,
-          label: 'Chiusura POS'
-        );
-      case 'daily_report_spielo':
-        return (
-          color: Colors.orangeAccent,
-          icon: Icons.casino,
-          label: 'Report Spielo'
-        );
-      case 'report_novoline_range':
-        return (
-          color: Colors.purpleAccent,
-          icon: Icons.analytics,
-          label: 'Novoline'
-        );
-      default:
-        return (
-          color: Colors.grey,
-          icon: Icons.description,
-          label: type
-        );
+  static int _compareDates(String a, String b) {
+    // Format DD/MM/YYYY
+    try {
+      final pa = a.split('/');
+      final pb = b.split('/');
+      final da = DateTime(int.parse(pa[2]), int.parse(pa[1]), int.parse(pa[0]));
+      final db = DateTime(int.parse(pb[2]), int.parse(pb[1]), int.parse(pb[0]));
+      return da.compareTo(db);
+    } catch (_) {
+      return a.compareTo(b);
     }
   }
 }
