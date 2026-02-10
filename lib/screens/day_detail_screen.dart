@@ -57,7 +57,15 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     super.dispose();
   }
 
-  String get _docId => widget.date.replaceAll('/', '-');
+  /// DD/MM/YYYY -> DDMMYY
+  String get _docId {
+    final parts = widget.date.split('/');
+    if (parts.length == 3) {
+      final yy = parts[2].length == 4 ? parts[2].substring(2) : parts[2];
+      return '${parts[0].padLeft(2, '0')}${parts[1].padLeft(2, '0')}$yy';
+    }
+    return widget.date.replaceAll('/', '');
+  }
 
   Future<void> _save() async {
     final apertura = double.tryParse(_aperturaCtrl.text) ?? 0;
