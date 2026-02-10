@@ -35,9 +35,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   }
 
   Future<void> _loadFromFirestore() async {
+    final docId = _makeDocId(widget.date);
     final doc = await FirebaseFirestore.instance
         .collection('days')
-        .doc(_docId)
+        .doc(docId)
         .get();
     if (doc.exists && mounted) {
       final data = doc.data()!;
@@ -57,27 +58,24 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     super.dispose();
   }
 
-  /// DD/MM/YYYY -> DDMMYY
-  String get _docId {
-    final parts = widget.date.split('/');
-    if (parts.length == 3) {
-      final yy = parts[2].length == 4 ? parts[2].substring(2) : parts[2];
-      return '${parts[0].padLeft(2, '0')}${parts[1].padLeft(2, '0')}$yy';
-    }
-    return widget.date.replaceAll('/', '');
+  String _makeDocId(String date) {
+    // "01/02/2026" -> "010226"
+    return date.replaceAll('/', '');
   }
 
   Future<void> _save() async {
     final apertura = double.tryParse(_aperturaCtrl.text) ?? 0;
     final spese = double.tryParse(_speseCtrl.text) ?? 0;
+    final docId = _makeDocId(widget.date);
+    debugPrint('Saving to days/$docId');
     await FirebaseFirestore.instance
         .collection('days')
-        .doc(_docId)
+        .doc(docId)
         .set({
       'date': widget.date,
       'aperturaCassa': apertura,
       'speseExtra': spese,
-    }, SetOptions(merge: true));
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
