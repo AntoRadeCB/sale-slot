@@ -84,10 +84,13 @@ class ReportsScreen extends StatelessWidget {
                 grouped.putIfAbsent(dateStr, () => []).add(doc);
               }
 
-              // Build days data map
+              // Build days data map (doc id uses - instead of /)
               final daysData = <String, Map<String, dynamic>>{};
               for (final doc in dayDocs) {
-                daysData[doc.id] = doc.data() as Map<String, dynamic>;
+                final data = doc.data() as Map<String, dynamic>;
+                // Map by date string (DD/MM/YYYY)
+                final dateKey = (data['date'] as String?) ?? doc.id.replaceAll('-', '/');
+                daysData[dateKey] = data;
               }
 
               final sortedDates = grouped.keys.toList()

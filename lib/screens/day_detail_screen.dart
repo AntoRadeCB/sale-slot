@@ -29,14 +29,25 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _aperturaCtrl = TextEditingController(
-        text: widget.aperturaCassa != 0
-            ? widget.aperturaCassa.toStringAsFixed(2)
-            : '');
-    _speseCtrl = TextEditingController(
-        text: widget.speseExtra != 0
-            ? widget.speseExtra.toStringAsFixed(2)
-            : '');
+    _aperturaCtrl = TextEditingController();
+    _speseCtrl = TextEditingController();
+    _loadFromFirestore();
+  }
+
+  Future<void> _loadFromFirestore() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('days')
+        .doc(_docId)
+        .get();
+    if (doc.exists && mounted) {
+      final data = doc.data()!;
+      final ap = (data['aperturaCassa'] as num?)?.toDouble() ?? 0;
+      final sp = (data['speseExtra'] as num?)?.toDouble() ?? 0;
+      setState(() {
+        _aperturaCtrl.text = ap != 0 ? ap.toStringAsFixed(2) : '';
+        _speseCtrl.text = sp != 0 ? sp.toStringAsFixed(2) : '';
+      });
+    }
   }
 
   @override
@@ -46,13 +57,16 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     super.dispose();
   }
 
+  String get _docId => widget.date.replaceAll('/', '-');
+
   Future<void> _save() async {
     final apertura = double.tryParse(_aperturaCtrl.text) ?? 0;
     final spese = double.tryParse(_speseCtrl.text) ?? 0;
     await FirebaseFirestore.instance
         .collection('days')
-        .doc(widget.date)
+        .doc(_docId)
         .set({
+      'date': widget.date,
       'aperturaCassa': apertura,
       'speseExtra': spese,
     }, SetOptions(merge: true));
