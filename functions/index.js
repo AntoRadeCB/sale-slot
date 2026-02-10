@@ -2,6 +2,7 @@ const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
+const { v4: uuidv4 } = require("uuid");
 
 admin.initializeApp();
 
@@ -23,13 +24,23 @@ exports.onImageUpload = onObjectFinalized(
     if (!object.name.startsWith("uploads/")) return;
     if (!object.contentType?.startsWith("image/")) return;
 
-    // Build public download URL
-    const bucketRef = admin.storage().bucket(object.bucket);
-    const fileRef = bucketRef.file(object.name);
-    await fileRef.makePublic();
-    const imageUrl = `https://storage.googleapis.com/${object.bucket}/${object.name}`;
+    // Build download URL with token from metadata
+    const bucket = admin.storage().bucket(object.bucket);
+    const file = bucket.file(object.name);
 
-    console.log(`Processing image: ${object.name}`);
+    // Set a download token if not present
+    let token = object.metadata?.firebaseStorageDownloadTokens;
+    if (!token) {
+      token = uuidv4();
+      await file.setMetadata({
+        metadata: { firebaseStorageDownloadTokens: token },
+      });
+    }
+
+    const encodedName = encodeURIComponent(object.name);
+    const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${object.bucket}/o/${encodedName}?alt=media&token=${token}`;
+
+    console.log(`Processing image: ${object.name}, URL: ${imageUrl}`);
 
     // 1. Call API with image
     const apiResponse = await fetch(API_URL, {
@@ -54,7 +65,7 @@ exports.onImageUpload = onObjectFinalized(
     const result = await apiResponse.json();
     console.log("API response:", JSON.stringify(result));
 
-    // 2. Parse response - format: { functionCall: { name, arguments, callId }, conversationID, ... }
+    // 2. Parse response
     const fc = result.functionCall;
 
     if (!fc || !fc.name || !fc.arguments) {
@@ -91,9 +102,6 @@ exports.onImageUpload = onObjectFinalized(
   }
 );
 
-/**
- * Send response back to hub API
- */
 async function notifyHub(apiKey, message) {
   try {
     await fetch(API_URL, {
@@ -110,9 +118,6 @@ async function notifyHub(apiKey, message) {
   }
 }
 
-/**
- * Build Firestore document based on function type
- */
 function buildDocument(functionName, args, imagePath, imageUrl, conversationID) {
   const base = {
     type: functionName,
@@ -141,14 +146,25 @@ function buildDocument(functionName, args, imagePath, imageUrl, conversationID) 
         vlt: args.vlt || [],
       };
 
-    case "report_novoline_range":
+    case "report_novoline_range": {
+      // Use 'from' as the date for grouping
+      const data = args.from || args.date || null;
+      // Calculate totale from VLT totalNetWin
+      let totale = 0;
+      if (args.vlt && Array.isArray(args.vlt)) {
+        for (const v of args.vlt) {
+          if (v.totalNetWin != null) totale += v.totalNetWin;
+        }
+      }
       return {
         ...base,
-        data: args.date || null,
+        data,
         from: args.from || null,
         to: args.to || null,
+        totale,
         vlt: args.vlt || [],
       };
+    }
 
     default:
       return { ...base, rawArgs: args };
