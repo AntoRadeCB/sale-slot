@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 
+const _proxyBase =
+    'https://europe-west1-saleslot-app.cloudfunctions.net/imageProxy';
+
 class CachedStorageImage extends StatelessWidget {
   final String? imageUrl;
   final String? imagePath;
 
   const CachedStorageImage({super.key, this.imageUrl, this.imagePath});
 
+  String? get _url {
+    if (imagePath != null && imagePath!.isNotEmpty) {
+      return '$_proxyBase?path=${Uri.encodeComponent(imagePath!)}';
+    }
+    return imageUrl;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final url = imageUrl;
+    final url = _url;
     if (url == null || url.isEmpty) {
-      return Container(
-        height: 200,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.broken_image, color: Colors.white24, size: 48),
-      );
+      return _placeholder();
     }
 
     return ClipRRect(
@@ -34,24 +36,20 @@ class CachedStorageImage extends StatelessWidget {
             child: const CircularProgressIndicator(strokeWidth: 2),
           );
         },
-        errorBuilder: (_, error, ___) => Container(
-          height: 200,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.broken_image, color: Colors.white24, size: 48),
-              SizedBox(height: 8),
-              Text('Immagine non disponibile',
-                  style: TextStyle(color: Colors.white24, fontSize: 12)),
-            ],
-          ),
-        ),
+        errorBuilder: (_, __, ___) => _placeholder(),
       ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      height: 200,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(Icons.broken_image, color: Colors.white24, size: 48),
     );
   }
 }

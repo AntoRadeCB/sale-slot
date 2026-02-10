@@ -1,4 +1,5 @@
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const { onRequest } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
@@ -170,3 +171,34 @@ function buildDocument(functionName, args, imagePath, imageUrl, conversationID) 
       return { ...base, rawArgs: args };
   }
 }
+
+/**
+ * Image proxy to avoid CORS issues
+ * Usage: /imageProxy?path=uploads/filename.jpg
+ */
+exports.imageProxy = onRequest(
+  { region: "europe-west1", memory: "256MiB", timeoutSeconds: 30 },
+  async (req, res) => {
+    const filePath = req.query.path;
+    if (!filePath) {
+      res.status(400).send("Missing path parameter");
+      return;
+    }
+
+    try {
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(filePath);
+      const [metadata] = await file.getMetadata();
+
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "public, max-age=86400");
+      res.set("Content-Type", metadata.contentType || "image/jpeg");
+
+      const stream = file.createReadStream();
+      stream.pipe(res);
+    } catch (err) {
+      console.error("Proxy error:", err.message);
+      res.status(404).send("Image not found");
+    }
+  }
+);
