@@ -23,13 +23,12 @@ exports.onImageUpload = onObjectFinalized(
     if (!object.name.startsWith("uploads/")) return;
     if (!object.contentType?.startsWith("image/")) return;
 
-    // Build public download URL
     const encodedName = encodeURIComponent(object.name);
     const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${object.bucket}/o/${encodedName}?alt=media`;
 
     console.log(`Processing image: ${object.name}`);
 
-    // Call external API
+    // 1. Call API with image
     const apiResponse = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -45,17 +44,18 @@ exports.onImageUpload = onObjectFinalized(
     if (!apiResponse.ok) {
       const text = await apiResponse.text();
       console.error(`API error: ${apiResponse.status} - ${text}`);
+      await notifyHub(hubApiKey.value(), `Errore API: ${apiResponse.status}`);
       throw new Error(`API returned ${apiResponse.status}`);
     }
 
     const result = await apiResponse.json();
     console.log("API response:", JSON.stringify(result));
 
-    // Parse tool calls from response
-    const toolCalls = extractToolCalls(result);
+    // 2. Parse response - format: { functionCall: { name, arguments, callId }, conversationID, ... }
+    const fc = result.functionCall;
 
-    if (!toolCalls || toolCalls.length === 0) {
-      console.log("No tool calls found, saving raw response");
+    if (!fc || !fc.name || !fc.arguments) {
+      console.log("No function call in response, saving raw");
       await admin.firestore().collection("scans").add({
         type: "unknown",
         imagePath: object.name,
@@ -63,73 +63,59 @@ exports.onImageUpload = onObjectFinalized(
         rawResponse: result,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      await notifyHub(hubApiKey.value(), "Errore: nessuna function call nella risposta");
       return;
     }
 
-    for (const toolCall of toolCalls) {
-      const { name, args } = toolCall;
-      console.log(`Processing tool call: ${name}`, JSON.stringify(args));
+    const functionName = fc.name;
+    const args = fc.arguments;
 
-      const doc = buildDocument(name, args, object.name, imageUrl);
+    console.log(`Function: ${functionName}`, JSON.stringify(args));
+
+    // 3. Save to Firestore
+    try {
+      const doc = buildDocument(functionName, args, object.name, imageUrl, result.conversationID);
       await admin.firestore().collection("reports").add(doc);
-      console.log(`Saved ${name} to Firestore`);
+      console.log(`Saved ${functionName} to Firestore`);
+
+      // 4. Notify hub: success
+      await notifyHub(hubApiKey.value(), "Successo: dati salvati correttamente");
+    } catch (err) {
+      console.error("Error saving to Firestore:", err);
+      await notifyHub(hubApiKey.value(), `Errore salvataggio: ${err.message}`);
+      throw err;
     }
   }
 );
 
 /**
- * Extract tool calls from API response
- * Handles OpenAI-style responses
+ * Send response back to hub API
  */
-function extractToolCalls(response) {
-  const calls = [];
-
-  // Try response.choices[0].message.tool_calls (OpenAI format)
-  if (response.choices?.[0]?.message?.tool_calls) {
-    for (const tc of response.choices[0].message.tool_calls) {
-      const args =
-        typeof tc.function.arguments === "string"
-          ? JSON.parse(tc.function.arguments)
-          : tc.function.arguments;
-      calls.push({ name: tc.function.name, args });
-    }
-    return calls;
+async function notifyHub(apiKey, message) {
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    });
+    console.log(`Hub notified: ${message}`);
+  } catch (err) {
+    console.error("Failed to notify hub:", err);
   }
-
-  // Try response.tool_calls directly
-  if (response.tool_calls) {
-    for (const tc of response.tool_calls) {
-      const args =
-        typeof tc.function?.arguments === "string"
-          ? JSON.parse(tc.function.arguments)
-          : tc.function?.arguments || tc.arguments;
-      calls.push({ name: tc.function?.name || tc.name, args });
-    }
-    return calls;
-  }
-
-  // Try response.function_call (single call)
-  if (response.function_call) {
-    const args =
-      typeof response.function_call.arguments === "string"
-        ? JSON.parse(response.function_call.arguments)
-        : response.function_call.arguments;
-    calls.push({ name: response.function_call.name, args });
-    return calls;
-  }
-
-  return calls;
 }
 
 /**
  * Build Firestore document based on function type
  */
-function buildDocument(functionName, args, imagePath, imageUrl) {
+function buildDocument(functionName, args, imagePath, imageUrl, conversationID) {
   const base = {
     type: functionName,
     imagePath,
     imageUrl,
-    rawArgs: args,
+    conversationID: conversationID || null,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
@@ -158,11 +144,10 @@ function buildDocument(functionName, args, imagePath, imageUrl) {
         data: args.date || null,
         from: args.from || null,
         to: args.to || null,
-        totale: null, // calcolato dal frontend
         vlt: args.vlt || [],
       };
 
     default:
-      return base;
+      return { ...base, rawArgs: args };
   }
 }
