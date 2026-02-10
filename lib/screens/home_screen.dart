@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/storage_service.dart';
+import 'reports_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Immagine caricata!'),
+            content: Text('✅ Immagine caricata! Elaborazione in corso...'),
             backgroundColor: Colors.green,
           ),
         );
@@ -70,6 +71,16 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('🎰 SaleSlot'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.list_alt),
+            tooltip: 'Report',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReportsScreen()),
+            ),
+          ),
+        ],
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -84,9 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.1),
-                  ),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
                 ),
                 child: _imageBytes != null
                     ? ClipRRect(
@@ -99,15 +108,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           Icon(Icons.image_outlined,
                               size: 64, color: Colors.white24),
                           SizedBox(height: 12),
-                          Text('Nessuna immagine',
+                          Text('Scatta o carica un report',
                               style: TextStyle(color: Colors.white38)),
                         ],
                       ),
               ),
-
               const SizedBox(height: 32),
 
-              // Upload indicator
               if (_uploading) ...[
                 const CircularProgressIndicator(),
                 const SizedBox(height: 16),
@@ -118,12 +125,11 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_uploadedUrl != null) ...[
                 const Icon(Icons.check_circle, color: Colors.green, size: 48),
                 const SizedBox(height: 8),
-                const Text('Upload completato!',
+                const Text('Upload completato! In elaborazione...',
                     style: TextStyle(color: Colors.green)),
                 const SizedBox(height: 32),
               ],
 
-              // Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -144,6 +150,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 32),
+
+              OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
+                ),
+                icon: const Icon(Icons.analytics),
+                label: const Text('Vedi Report'),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
             ],
           ),
         ),
@@ -157,11 +180,7 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
 
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _ActionButton({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
