@@ -258,9 +258,12 @@ class _ReportSection extends StatelessWidget {
     final imagePath = data['imagePath'] as String?;
     final imageUrl = data['imageUrl'] as String?;
     // Use 'terminali' for Snai, 'vlt' for others
-    final vlt = type == 'CSMFG1_Snai_report'
-        ? data['terminali'] as List<dynamic>?
-        : data['vlt'] as List<dynamic>?;
+    List<dynamic>? vlt;
+    if (type == 'CSMFG1_Snai_report') {
+      vlt = data['terminali'] is List ? data['terminali'] as List<dynamic> : null;
+    } else {
+      vlt = data['vlt'] is List ? data['vlt'] as List<dynamic> : null;
+    }
     final totale = data['totale'];
     final nomeAzienda = data['nomeAzienda'];
     final isWide = MediaQuery.of(context).size.width > 600;
