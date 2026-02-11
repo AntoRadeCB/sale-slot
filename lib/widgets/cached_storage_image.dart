@@ -88,92 +88,65 @@ class _FullscreenImageView extends StatefulWidget {
 }
 
 class _FullscreenImageViewState extends State<_FullscreenImageView> {
-  bool _showOverlay = false;
+  bool _showPanel = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Zoomable image
-          InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 5.0,
-            child: Center(
-              child: Image.network(widget.url, fit: BoxFit.contain),
-            ),
-          ),
-
-          // Back button
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 8,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-
-          // Toggle overlay button
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
           if (widget.reportData != null)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              right: 8,
-              child: IconButton(
-                icon: Icon(
-                  _showOverlay ? Icons.visibility_off : Icons.table_chart,
-                  color: Colors.white,
-                ),
-                onPressed: () => setState(() => _showOverlay = !_showOverlay),
+            IconButton(
+              icon: Icon(
+                _showPanel ? Icons.fullscreen : Icons.table_chart,
+                color: Colors.white,
               ),
-            ),
-
-          // Data overlay
-          if (_showOverlay && widget.reportData != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: GestureDetector(
-                onTap: () {}, // prevent tap-through
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.85),
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Handle
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: _buildOverlayContent(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              tooltip: _showPanel ? 'Solo foto' : 'Mostra dati',
+              onPressed: () => setState(() => _showPanel = !_showPanel),
             ),
         ],
       ),
+      body: _showPanel && widget.reportData != null
+          ? Row(
+              children: [
+                // Image left
+                Expanded(
+                  flex: 1,
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 5.0,
+                    child: Center(
+                      child: Image.network(widget.url, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+                // Data panel right
+                Container(width: 1, color: Colors.white12),
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    color: const Color(0xFF1A1A2E),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(12),
+                      child: _buildOverlayContent(),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Center(
+                child: Image.network(widget.url, fit: BoxFit.contain),
+              ),
+            ),
     );
   }
 
