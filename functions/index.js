@@ -167,6 +167,32 @@ function buildDocument(functionName, args, imagePath, imageUrl, conversationID) 
       };
     }
 
+    case "daily_playtech_report":
+      return {
+        ...base,
+        data: args.data || null,
+        totale: args.totale || 0,
+        nomeAzienda: args.nomeAzienda || null,
+        banconote: args.banconote || 0,
+        ticketIncassati: args.ticketIncassati || 0,
+        hasUncertainValues: args.hasUncertainValues || false,
+        uncertainFields: args.uncertainFields || [],
+      };
+
+    case "CSMFG1_Snai_report":
+      return {
+        ...base,
+        data: args.data || null,
+        totale: args.totale || 0,
+        nomeAzienda: args.nomeAzienda || null,
+        pagamentoPrelievoVoucher: args.pagamentoPrelievoVoucher || 0,
+        versamentoFaiConMeEmissione: args.versamentoFaiConMeEmissione || 0,
+        prelievoFaiConMeFastbet: args.prelievoFaiConMeFastbet || 0,
+        terminali: args.terminali || [],
+        hasUncertainValues: args.hasUncertainValues || false,
+        uncertainFields: args.uncertainFields || [],
+      };
+
     default:
       return { ...base, rawArgs: args };
   }

@@ -257,7 +257,10 @@ class _ReportSection extends StatelessWidget {
     final type = data['type'] ?? 'unknown';
     final imagePath = data['imagePath'] as String?;
     final imageUrl = data['imageUrl'] as String?;
-    final vlt = data['vlt'] as List<dynamic>?;
+    // Use 'terminali' for Snai, 'vlt' for others
+    final vlt = type == 'CSMFG1_Snai_report'
+        ? data['terminali'] as List<dynamic>?
+        : data['vlt'] as List<dynamic>?;
     final totale = data['totale'];
     final nomeAzienda = data['nomeAzienda'];
     final isWide = MediaQuery.of(context).size.width > 600;
@@ -321,8 +324,50 @@ class _ReportSection extends StatelessWidget {
               ],
               _VltTable(vlt: vlt, type: type),
             ],
+
+            // Extra fields for Playtech
+            if (type == 'daily_playtech_report') ...[
+              const SizedBox(height: 12),
+              _ExtraRow('Banconote', data['banconote']),
+              _ExtraRow('Ticket Incassati', data['ticketIncassati']),
+            ],
+
+            // Extra fields for Snai
+            if (type == 'CSMFG1_Snai_report') ...[
+              const SizedBox(height: 12),
+              _ExtraRow('Pag. Prelievo Voucher', data['pagamentoPrelievoVoucher']),
+              _ExtraRow('Vers. FaiConMe/Emissione', data['versamentoFaiConMeEmissione']),
+              _ExtraRow('Prel. FaiConMe/Fastbet', data['prelievoFaiConMeFastbet']),
+            ],
+
+            // Uncertain values warning
+            if (data['hasUncertainValues'] == true) ...[
+              const SizedBox(height: 8),
+              const Row(children: [
+                Icon(Icons.warning_amber, size: 16, color: Colors.amber),
+                SizedBox(width: 4),
+                Text('Valori incerti rilevati',
+                    style: TextStyle(color: Colors.amber, fontSize: 12)),
+              ]),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  static Widget _ExtraRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          Text(
+            value != null ? '€ ${_fmt(value)}' : '-',
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+          ),
+        ],
       ),
     );
   }
@@ -348,6 +393,7 @@ class _VltTable extends StatelessWidget {
 
     if (type == 'daily_report_spielo') return _buildSpieloTable();
     if (type == 'report_novoline_range') return _buildNovolineTable();
+    if (type == 'CSMFG1_Snai_report') return _buildSnaiTable();
     return _buildGenericList();
   }
 
@@ -491,6 +537,78 @@ class _VltTable extends StatelessWidget {
     );
   }
 
+  Widget _buildSnaiTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Terminali',
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: Colors.white70)),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withOpacity(0.03),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor:
+                  WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
+              columns: const [
+                DataColumn(
+                    label: Text('N°',
+                        style: TextStyle(
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text('Tipo',
+                        style: TextStyle(
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text('Netto Cassa',
+                        style: TextStyle(
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold)),
+                    numeric: true),
+              ],
+              rows: vlt!.map((v) {
+                final m = v as Map<String, dynamic>;
+                final hasUncertain = m['hasUncertainValues'] == true;
+                return DataRow(
+                  color: hasUncertain
+                      ? WidgetStateProperty.all(Colors.amber.withOpacity(0.06))
+                      : null,
+                  cells: [
+                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(m['number'] ?? '-',
+                          style: const TextStyle(color: Colors.white)),
+                      if (hasUncertain)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.warning_amber,
+                              size: 12, color: Colors.amber),
+                        ),
+                    ])),
+                    DataCell(Text(m['type'] ?? '-',
+                        style: const TextStyle(color: Colors.white70))),
+                    DataCell(Text(_fmt(m['total']),
+                        style: const TextStyle(
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.bold))),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildGenericList() {
     return Column(
       children: vlt!
@@ -585,6 +703,18 @@ class _TypeBadge extends StatelessWidget {
           color: Colors.purpleAccent,
           icon: Icons.analytics,
           label: 'Novoline'
+        );
+      case 'daily_playtech_report':
+        return (
+          color: Colors.tealAccent,
+          icon: Icons.videogame_asset,
+          label: 'Playtech'
+        );
+      case 'CSMFG1_Snai_report':
+        return (
+          color: Colors.yellowAccent,
+          icon: Icons.sports_soccer,
+          label: 'Snai'
         );
       default:
         return (color: Colors.grey, icon: Icons.description, label: type);
