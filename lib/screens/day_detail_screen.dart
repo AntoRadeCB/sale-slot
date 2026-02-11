@@ -310,7 +310,8 @@ class _ReportSection extends StatelessWidget {
                     Expanded(
                       flex: 2,
                       child: CachedStorageImage(
-                          imagePath: imagePath, imageUrl: imageUrl),
+                          imagePath: imagePath, imageUrl: imageUrl,
+                          reportData: data, reportType: type),
                     ),
                   if (imagePath != null || imageUrl != null)
                     const SizedBox(width: 16),
@@ -322,7 +323,8 @@ class _ReportSection extends StatelessWidget {
               )
             else ...[
               if (imagePath != null || imageUrl != null) ...[
-                CachedStorageImage(imagePath: imagePath, imageUrl: imageUrl),
+                CachedStorageImage(imagePath: imagePath, imageUrl: imageUrl,
+                    reportData: data, reportType: type),
                 const SizedBox(height: 16),
               ],
               _VltTable(vlt: vlt, type: type),
