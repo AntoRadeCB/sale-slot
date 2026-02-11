@@ -25,18 +25,43 @@ class CachedStorageImage extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        url,
-        fit: BoxFit.contain,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: 200,
-            alignment: Alignment.center,
-            child: const CircularProgressIndicator(strokeWidth: 2),
-          );
-        },
-        errorBuilder: (_, __, ___) => _placeholder(),
+      child: GestureDetector(
+        onTap: () => _openFullscreen(context, url),
+        child: Image.network(
+          url,
+          fit: BoxFit.contain,
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              height: 200,
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+          errorBuilder: (_, __, ___) => _placeholder(),
+        ),
+      ),
+    );
+  }
+
+  void _openFullscreen(BuildContext context, String url) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+          ),
+          body: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5.0,
+            child: Center(
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+          ),
+        ),
       ),
     );
   }
